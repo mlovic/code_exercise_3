@@ -1,0 +1,53 @@
+<!-- vim: set ft=markdown:-->
+# Checkout 2017
+
+This is a new solution to the checkout exercise, which I compare to [my old solution](https://github.com/mlovic/code_exercise_1) from a year ago. Following is the reasoning behind the main design changes. I recommend looking at both solutions first.
+<!--I already implemented a solution for this exercise a year ago. I've made a few small changes and you can find it here. This year I've implemented a new one with a few design changes, mostly to the pricing rules:-->
+<!--I have a different solution from a year ago you can see at xxx. I'd like to compare it to this one. The main difference is in the implementation of the pricing rules.-->
+<!--3 main design changes:-->
+
+## 1-1 association between rules and products.
+
+This has some limitations with respect to the old implementation. Each product can only have one rule, and any rule can only take into account the quantity of one product. However, there are several benefits:
+ - [Performance] Only the rules for the items in the cart need to be applied, not all.
+ - [Design] The pricing rule does not need access to the whole cart. This decouples the two things.
+ - [Design] There is a more defined interface between checkout and pricing_rule. This makes it easier, for example, to switch out the "catalogue" hash for some other storage backend, like Redis:
+
+        class RedisCatalogue
+          ...
+          def key?(sku)
+            @conn.exists(sku)
+          end
+        
+          def [](sku)
+            build_rule(@conn.hgetall(sku))
+          end
+          ...
+        end
+
+        pricing_rules = RedisCatalogue.new(conn)
+        Checkout.new(pricing_rules)
+
+<!--This saves complexity and bugs.-->
+  <!--An additional advantage is removing the need to iterate over all rules. Only the relevant rules are accessed. This "smaller" interface would be good, for example, to switch out the "catalogue" hash for some other storage backend, like Redis:-->
+
+## Remove the concept of discount
+
+In this version, a pricing rule doesn't calculate the discount, but the price. This, I think, makes the code a little bit simpler, as we don't have to deal with the concept of subtotal/discount/total. On the other hand, it's easy to imagine future requirements which involve these things.
+
+## Use polymorphism to eliminate the "special case"
+
+After the above changes, we end up with two cases for calculating a product's price: "discount", and "no discount". By implementing a default `StandardPrice` class, we incorporate this "no discount" case into the pricing rule case/abstraction. In effect, we remove the conditional and replace it with polymorphism :tada:OOP:tada:.
+
+
+------------------------
+
+
+These changes all help to further decouple the pricing logic from the Checkout class.
+
+Finally, I feel like this is the solution that the exercise instructions are hinting at, by using the term "pricing rule", instead of "discount".
+
+
+## Other considerations
+ - Would not use floating point numbers for currency in a real production system. I did so here for convenience and because it would be trivial to change.
+ - See `all_in_one_for_reviewer_convenience.rb` to review all the code in one file.
